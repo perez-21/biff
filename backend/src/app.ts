@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import { createServer } from "http";
-import { WebSocketServer } from "ws";
 import dotenv from "dotenv";
 import swaggerUi from "swagger-ui-express";
 import { connectDB } from "./config/database";
@@ -9,6 +8,7 @@ import { swaggerSpec } from "./config/swagger";
 import authRoutes from "./routes/auth.routes";
 import chatRoutes from "./routes/chat.routes";
 import { apiLimiter } from "./middleware/rate-limit.middleware";
+import { SocketService } from "./services/socket.service";
 
 dotenv.config();
 
@@ -32,20 +32,11 @@ app.use("/api/chat", chatRoutes);
 // Create HTTP server
 const server = createServer(app);
 
-// WebSocket server
-const wss = new WebSocketServer({ server });
+// Initialize Socket.IO service
+const socketService = new SocketService(server);
 
-wss.on("connection", (ws) => {
-  console.log("New WebSocket connection");
-
-  ws.on("message", (message) => {
-    console.log("Received:", message.toString());
-  });
-
-  ws.on("close", () => {
-    console.log("Client disconnected");
-  });
-});
+// Make socketService available to routes
+app.set("socketService", socketService);
 
 // Connect to MongoDB
 connectDB();
