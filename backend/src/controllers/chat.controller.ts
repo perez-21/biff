@@ -1,21 +1,62 @@
 import { Request, Response } from "express";
 import { Conversation } from "../models/conversation.model";
 import { Message } from "../models/message.model";
+import Joi from "joi";
 
 export class ChatController {
-  async createConversation(req: Request, res: Response) {
-    try {
-      const { title } = req.body;
-      const userId = req.user._id;
+  constructor() {
+    this.createConversationSchema = Joi.object({
+      title: Joi.string().max(100).optional(),
+      aiModel: Joi.string().valid("gpt-3.5-turbo", "gpt-4").optional(),
+    });
+    this.sendMessageSchema = Joi.object({
+      content: Joi.string().required(),
+      role: Joi.string().valid("user", "assistant").required(),
+    });
+  }
 
-      const conversation = await Conversation.create({
+  createConversationSchema: Joi.ObjectSchema;
+
+  sendMessageSchema: Joi.ObjectSchema;
+
+  async createConversation(req: Request, res: Response, auth) {
+    try {
+      const { error, value } = this.createConversationSchema.validate(req.body);
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: error.details[0].message,
+        });
+      }
+
+      const { title = "New Chat", model = "gpt-3.5-turbo" } = value;
+      const userId = req.user.userId;
+
+      const conversation = new Conversation({
         userId,
         title,
+        model,
+        messages: [],
       });
 
-      res.status(201).json(conversation);
+      await conversation.save();
+
+      res.status(201).json({
+        success: true,
+        message: "conversation created successfully",
+        conversation: {
+          id: conversation._id,
+          title: conversation.title,
+          model: conversation.model,
+          createdAt: conversation.createdAt,
+          metadata: conversation.metadata,
+        },
+      });
     } catch (error) {
-      res.status(500).json({ message: "Error creating conversation" });
+      console.error("Error creating conversation:", error);
+      res.status(500).json({
+        success: false,
+      });
     }
   }
 
@@ -42,6 +83,7 @@ export class ChatController {
       const conversation = await Conversation.findOne({
         _id: conversationId,
         userId,
+        isArchived: false,
       });
 
       if (!conversation) {
